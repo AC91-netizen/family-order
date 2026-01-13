@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Family Order Builder 🍔</title>
+<style>
+body { font-family: Arial, sans-serif; background:#f4f4f4; padding:20px; }
+h1 input { font-size:2rem; width:100%; border:none; background:transparent; text-align:center; font-weight:bold; }
+.section { background:#fff; padding:20px; margin:20px auto; max-width:1100px; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,.1); }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
+label { background:#eee; padding:8px; border-radius:8px; display:flex; gap:8px; }
+button { padding:6px 12px; border:none; border-radius:8px; background:#333; color:#fff; cursor:pointer; }
+button.small { background:#a33; font-size:.8rem; }
+.person-card { border-top:1px solid #ddd; padding-top:15px; margin-top:15px; }
+.summary { background:#fff3cd; padding:10px; border-radius:8px; margin-top:10px; font-weight:bold; }
+.hidden { display:none; }
+.status { display:flex; gap:6px; margin-top:6px; }
+.status button { background:#666; }
+.status button.active { background:#28a745; }
+.completed { background:#d4edda; }
+</style>
+</head>
+<body>
+
+<h1><input id="title"></h1>
+
+<div id="builder">
+
+<div class="section">
+<h2>👨‍🍳 Ingredients</h2>
+<input id="newIng" placeholder="Add ingredient">
+<button onclick="addIngredient()">Add</button>
+<div id="ingredients" class="grid"></div>
+</div>
+
+<div class="section">
+<h2>👨‍👩‍👧‍👦 People</h2>
+<input id="newPerson" placeholder="Add person">
+<button onclick="addPerson()">Add Person</button>
+<div id="people"></div>
+</div>
+
+<button onclick="showOrders()">📋 View Order List</button>
+</div>
+
+<div id="ordersPage" class="hidden">
+<div class="section">
+<h2>📋 Active Orders</h2>
+<div id="orders"></div>
+</div>
+
+<div class="section">
+<h2>✅ Completed Orders</h2>
+<div id="completed"></div>
+<button onclick="back()">⬅ Back</button>
+</div>
+</div>
+
+<script>
+const STORAGE_KEY = "FamilyOrderBuilder_v4";
+
+const defaults = {
+ title:"🍔 Family Order Builder 🍔",
+ ingredients:["Beef Patty","Chicken Patty","Veggie Patty","Cheese","Bacon","Hash Browns","Lettuce","Tomato","Onion","Pickles","Coleslaw","Ketchup","Mayo","BBQ Sauce","Sweet Chilli Sauce","Hot Chilli Sauce"]
+};
+
+let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+ title: defaults.title,
+ ingredients: defaults.ingredients.map(i=>({name:i, enabled:true})),
+ people: [],
+ orders: {},
+ status: {},
+ completed: {}
+};
+
+const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+document.getElementById("title").value = state.title;
+document.getElementById("title").oninput = e => { state.title = e.target.value; save(); };
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+function renderIngredients(){
+ const d=document.getElementById("ingredients"); d.innerHTML="";
+ state.ingredients.forEach((i,idx)=>{
+  const l=document.createElement("label");
+  l.innerHTML = `<input type="checkbox" ${i.enabled?"checked":""}> ${i.name} ❌`;
+  l.querySelector("input").onchange=e=>{ i.enabled=e.target.checked; save(); renderPeople(); };
+  l.onclick=e=>{ if(e.target.textContent.includes("❌")){ state.ingredients.splice(idx,1); save(); renderIngredients(); renderPeople(); }};
+  d.appendChild(l);
+ });
+}
+
+function renderPeople(){
+ const d=document.getElementById("people"); d.innerHTML="";
+ state.people.forEach(p=>{
+  const card=document.createElement("div");
+  card.className="person-card";
+  card.innerHTML = `<input value="${p.name}"><button class="small">Remove</button><div class="grid"></div><div class="summary"></div>`;
+
+  card.querySelector("input").oninput=e=>{ p.name=e.target.value; save(); };
+  card.querySelector("button").onclick=()=>{
+    delete state.orders[p.id];
+    delete state.status[p.id];
+    state.people = state.people.filter(x=>x.id!==p.id);
+    save(); renderPeople();
+  };
+
+  const grid=card.querySelector(".grid");
+  state.ingredients.filter(i=>i.enabled).forEach(i=>{
+    const lbl=document.createElement("label");
+    const cb=document.createElement("input");
+    cb.type="checkbox";
+    cb.checked = state.orders[p.id]?.includes(i.name);
+    cb.onchange=()=>{
+      state.orders[p.id] ||= [];
+      cb.checked ? state.orders[p.id].push(i.name)
+                 : state.orders[p.id]=state.orders[p.id].filter(x=>x!==i.name);
+      save(); update();
+    };
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(i.name));
+    grid.appendChild(lbl);
+  });
+
+  const sum=card.querySelector(".summary");
+  const update=()=>{
+    const items=state.orders[p.id]||[];
+    sum.textContent = items.length ? `🍔 ${p.name}: ${items.join(", ")}` : `🍞 ${p.name}: Plain`;
+  };
+  update();
+  d.appendChild(card);
+ });
+}
+
+function addPerson(){
+ const input=document.getElementById("newPerson");
+ const name=input.value.trim();
+ if(!name) return;
+ const id=uid();
+ state.people.push({id,name});
+ state.orders[id]=[];
+ state.status[id]="Waiting";
+ input.value="";
+ save(); renderPeople();
+}
+
+function addIngredient(){
+ const input=document.getElementById("newIng");
+ const name=input.value.trim();
+ if(!name) return;
+ state.ingredients.push({name,enabled:true});
+ input.value="";
+ save(); renderIngredients(); renderPeople();
+}
+
+function showOrders(){
+ document.getElementById("builder").classList.add("hidden");
+ document.getElementById("ordersPage").classList.remove("hidden");
+ renderOrders();
+}
+
+function renderOrders(){
+ const o=document.getElementById("orders"); o.innerHTML="";
+ const c=document.getElementById("completed"); c.innerHTML="";
+ state.people.forEach(p=>{
+  const items = state.orders[p.id] || [];
+  if(state.status[p.id]==="Completed"){
+    const d=document.createElement("div");
+    d.className="summary completed";
+    d.textContent = `${p.name}: ${state.completed[p.id]?.join(", ")||""}`;
+    c.appendChild(d);
+  } else {
+    const d=document.createElement("div");
+    d.className="summary";
+    d.textContent = `${p.name}: ${items.length?items.join(", "):"Plain"}`;
+    const st=document.createElement("div");
+    st.className="status";
+    ["Waiting","In Progress","Complete"].forEach(s=>{
+      const b=document.createElement("button");
+      b.textContent=s;
+      if(state.status[p.id]===s) b.classList.add("active");
+      b.onclick=()=>{
+        if(s==="Complete"){
+          state.completed[p.id]=[...items];
+          state.orders[p.id]=[];
+          state.status[p.id]="Completed";
+        } else state.status[p.id]=s;
+        save(); renderOrders();
+      };
+      st.appendChild(b);
+    });
+    d.appendChild(st);
+    o.appendChild(d);
+  }
+ });
+}
+
+function back(){
+ document.getElementById("ordersPage").classList.add("hidden");
+ document.getElementById("builder").classList.remove("hidden");
+}
+
+renderIngredients();
+renderPeople();
+</script>
+</body>
+</html>
