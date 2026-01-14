@@ -9,49 +9,16 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <style>
-body{
-  font-family:'Segoe UI',sans-serif;
-  background:#f7f3ef;
-  margin:0;padding:20px
-}
+body{font-family:'Segoe UI',sans-serif;background:#f7f3ef;margin:0;padding:20px}
 h1{text-align:center;font-size:2.3em}
-.section{
-  background:#fff;
-  padding:16px;
-  margin:16px auto;
-  max-width:1000px;
-  border-radius:14px;
-  box-shadow:0 4px 15px rgba(0,0,0,.08)
-}
+.section{background:#fff;padding:16px;margin:16px auto;max-width:1000px;border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,.08)}
 .row{display:flex;gap:8px;flex-wrap:wrap}
-input{
-  padding:8px;
-  border-radius:8px;
-  border:1px solid #ccc;
-  flex:1
-}
-button{
-  padding:8px 14px;
-  border-radius:8px;
-  border:none;
-  background:#ff7a18;
-  color:#fff;
-  cursor:pointer
-}
+input{padding:8px;border-radius:8px;border:1px solid #ccc;flex:1}
+button{padding:8px 14px;border-radius:8px;border:none;background:#ff7a18;color:#fff;cursor:pointer}
 button.danger{background:#c0392b}
 button.small{padding:4px 8px;font-size:.8em}
-.person{
-  background:#fafafa;
-  border-radius:12px;
-  padding:12px;
-  margin-top:12px
-}
-.ingredient{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin:4px 0
-}
+.person{background:#fafafa;border-radius:12px;padding:12px;margin-top:12px}
+.ingredient{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
 </style>
 </head>
 
@@ -98,17 +65,21 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database().ref("step1");
+const db = firebase.database().ref("step1-fixed");
 
 let chefUnlocked=false;
-let state={
-  title:"🍔 Family Order Builder",
-  ingredients:["Beef","Chicken","Cheese","Bacon"],
-  people:{}
-};
+let state=null;
 
 db.on("value",snap=>{
-  if(snap.exists()) state=snap.val();
+  if(!snap.exists()){
+    db.set({
+      title:"🍔 Family Order Builder",
+      ingredients:{},
+      people:{}
+    });
+    return;
+  }
+  state=snap.val();
   render();
 });
 
@@ -118,29 +89,32 @@ function unlockChef(){
   if(chefPin.value==="1234"){
     chefUnlocked=true;
     chefStatus.innerText="🔓 Chef unlocked";
+    render();
   }
 }
 
 function addIngredient(){
   if(!chefUnlocked) return alert("Chef locked");
-  const v=newIngredient.value.trim();
-  if(!v) return;
-  state.ingredients.push(v);
+  const name=newIngredient.value.trim();
+  if(!name) return;
+  const id=Date.now();
+  state.ingredients[id]={name};
   newIngredient.value="";
   save();
 }
 
-function removeIngredient(i){
+function removeIngredient(id){
   if(!chefUnlocked) return;
-  state.ingredients.splice(i,1);
-  Object.values(state.people).forEach(p=>delete p.items?.[i]);
+  delete state.ingredients[id];
+  Object.values(state.people).forEach(p=>delete p.items[id]);
   save();
 }
 
 function addPerson(){
   const name=newPerson.value.trim();
   if(!name) return;
-  state.people[Date.now()]={name,items:{}};
+  const id=Date.now();
+  state.people[id]={name,items:{}};
   newPerson.value="";
   save();
 }
@@ -150,8 +124,8 @@ function removePerson(id){
   save();
 }
 
-function toggleItem(pid,ing){
-  state.people[pid].items[ing]=!state.people[pid].items[ing];
+function toggleItem(pid,iid){
+  state.people[pid].items[iid]=!state.people[pid].items[iid];
   save();
 }
 
@@ -159,27 +133,27 @@ function render(){
   title.innerText=state.title;
 
   ingredientList.innerHTML="";
-  state.ingredients.forEach((ing,i)=>{
+  Object.entries(state.ingredients).forEach(([id,ing])=>{
     ingredientList.innerHTML+=`
       <div class="ingredient">
-        <span>${ing}</span>
-        ${chefUnlocked?`<button class="small danger" onclick="removeIngredient(${i})">✖</button>`:""}
+        <span>${ing.name}</span>
+        ${chefUnlocked?`<button class="small danger" onclick="removeIngredient(${id})">✖</button>`:""}
       </div>`;
   });
 
   peopleList.innerHTML="";
-  Object.entries(state.people).forEach(([id,p])=>{
+  Object.entries(state.people).forEach(([pid,p])=>{
     let html=`<div class="person"><strong>${p.name}</strong>`;
-    state.ingredients.forEach(ing=>{
-      const c=p.items[ing]?"checked":"";
+    Object.entries(state.ingredients).forEach(([iid,ing])=>{
+      const c=p.items[iid]?"checked":"";
       html+=`
         <div>
           <input type="checkbox" ${c}
-            onclick="toggleItem(${id},'${ing}')"> ${ing}
+            onclick="toggleItem(${pid},${iid})"> ${ing.name}
         </div>`;
     });
     html+=`
-      <button class="danger small" onclick="removePerson(${id})">Remove</button>
+      <button class="danger small" onclick="removePerson(${pid})">Remove</button>
     </div>`;
     peopleList.innerHTML+=html;
   });
