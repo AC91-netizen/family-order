@@ -19,12 +19,14 @@ button.danger{background:#c0392b}
 button.small{padding:4px 8px;font-size:.8em}
 .person{background:#fafafa;border-radius:12px;padding:12px;margin-top:12px}
 .ingredient{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
+#status{text-align:center;font-weight:bold;margin-bottom:10px}
 </style>
 </head>
 
 <body>
 
 <h1 contenteditable id="title">🍔 Family Order Builder</h1>
+<div id="status">⏳ Loading…</div>
 
 <div class="section">
 <h2>👨‍🍳 Chef Controls</h2>
@@ -65,23 +67,35 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database().ref("step1-fixed");
+const db = firebase.database().ref("step1-final");
 
 let chefUnlocked=false;
 let state=null;
+let ready=false;
 
 db.on("value",snap=>{
   if(!snap.exists()){
-    db.set({
+    const initial={
       title:"🍔 Family Order Builder",
       ingredients:{},
       people:{}
-    });
+    };
+    db.set(initial);
     return;
   }
   state=snap.val();
+  ready=true;
+  status.innerText="✅ Ready";
   render();
 });
+
+function ensureReady(){
+  if(!ready){
+    alert("Please wait for page to finish loading");
+    return false;
+  }
+  return true;
+}
 
 function save(){ db.set(state); }
 
@@ -94,11 +108,11 @@ function unlockChef(){
 }
 
 function addIngredient(){
+  if(!ensureReady()) return;
   if(!chefUnlocked) return alert("Chef locked");
   const name=newIngredient.value.trim();
   if(!name) return;
-  const id=Date.now();
-  state.ingredients[id]={name};
+  state.ingredients[Date.now()]={name};
   newIngredient.value="";
   save();
 }
@@ -106,15 +120,15 @@ function addIngredient(){
 function removeIngredient(id){
   if(!chefUnlocked) return;
   delete state.ingredients[id];
-  Object.values(state.people).forEach(p=>delete p.items[id]);
+  Object.values(state.people).forEach(p=>delete p.items?.[id]);
   save();
 }
 
 function addPerson(){
+  if(!ensureReady()) return;
   const name=newPerson.value.trim();
   if(!name) return;
-  const id=Date.now();
-  state.people[id]={name,items:{}};
+  state.people[Date.now()]={name,items:{}};
   newPerson.value="";
   save();
 }
