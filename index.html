@@ -4,50 +4,82 @@
 <meta charset="UTF-8">
 <title>Family Order Board</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Firebase compat -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
 <style>
-body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:20px}
-h1{text-align:center}
-.section{background:#fff;padding:15px;margin:15px auto;max-width:1100px;border-radius:10px}
-.person{border:1px solid #ddd;border-radius:8px;padding:10px;margin:10px 0}
-button{padding:6px 12px;margin:4px}
-.status{font-weight:bold}
-.completed{opacity:.6}
-.controls{margin-top:8px}
+body{
+  font-family:'Segoe UI',sans-serif;
+  background:linear-gradient(135deg,#ffecd2,#fcb69f);
+  margin:0;padding:20px
+}
+h1{text-align:center;font-size:2.5em}
+.section{
+  background:#fff;
+  padding:15px;
+  margin:15px auto;
+  max-width:1100px;
+  border-radius:14px;
+  box-shadow:0 6px 20px rgba(0,0,0,.1)
+}
+.person{
+  background:#fafafa;
+  border-radius:12px;
+  padding:12px;
+  margin:12px 0;
+  box-shadow:0 3px 10px rgba(0,0,0,.08)
+}
+button{
+  background:#ff7a18;
+  border:none;
+  color:#fff;
+  padding:6px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  margin:4px
+}
+button.secondary{background:#999}
+button.danger{background:#d9534f}
+button:active{transform:scale(.97)}
+.status{font-weight:bold;margin-top:6px}
+.completed{opacity:.6;text-decoration:line-through}
+input{padding:6px;border-radius:6px;border:1px solid #ccc}
 </style>
 </head>
+
 <body>
 
-<h1 contenteditable id="title">Family Order Board</h1>
+<h1 contenteditable="true" id="title">🍔 Family Order Board</h1>
 
 <div class="section">
-<h2>Chef Controls</h2>
-<input type="password" id="pin" placeholder="Chef PIN (default 1234)">
-<button onclick="unlock()">Unlock</button>
+<h2>👨‍🍳 Chef Controls</h2>
+<input type="password" id="pin" placeholder="Chef PIN">
+<button onclick="unlockChef()">Unlock</button>
+<span id="chefStatus"></span>
 </div>
 
 <div class="section">
-<h2>Ingredients</h2>
-<input id="newIng" placeholder="Add ingredient">
+<h2>🥗 Ingredients</h2>
+<input id="newIngredient" placeholder="Add ingredient">
 <button onclick="addIngredient()">Add</button>
-<div id="ingredients"></div>
+<div id="ingredientList"></div>
 </div>
 
 <div class="section">
-<h2>People</h2>
+<h2>👨‍👩‍👧‍👦 Family Orders</h2>
 <input id="newPerson" placeholder="Add person">
 <button onclick="addPerson()">Add Person</button>
 <div id="people"></div>
 </div>
 
 <div class="section">
-<h2>Completed Orders</h2>
+<h2>✅ Completed Orders</h2>
 <div id="completed"></div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
-
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyDC8KLBdJ_eKxmGgUxvkMYL0FTK9b3V0UU",
   authDomain: "family-order-board-e0194.firebaseapp.com",
@@ -58,109 +90,98 @@ const firebaseConfig = {
   appId: "1:171957463704:web:1ea720f263998104107eed"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const dataRef = ref(db, "family-orders");
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database().ref("orders");
 
-let unlocked=false;
+let chefUnlocked=false;
 let state={
- title:"Family Order Board",
- ingredients:["Beef","Chicken","Cheese","Bacon"],
+ title:"🍔 Family Order Board",
+ ingredients:["Beef","Chicken","Cheese","Bacon","Hash Browns","Coleslaw","Sweet Chilli","Hot Chilli","Pickled Onion Mayo"],
  people:{}
 };
 
-function save(){ set(dataRef,state); }
+function save(){ db.set(state); }
 
-onValue(dataRef,snap=>{
+db.on("value",snap=>{
  if(snap.exists()) state=snap.val();
  render();
 });
 
-function unlock(){
+function unlockChef(){
  if(document.getElementById("pin").value==="1234"){
-  unlocked=true;
-  alert("Chef unlocked");
+  chefUnlocked=true;
+  document.getElementById("chefStatus").innerText=" 🔓 Unlocked";
  }
 }
 
 function addIngredient(){
- if(!unlocked) return alert("Chef locked");
- const v=document.getElementById("newIng").value.trim();
+ if(!chefUnlocked) return alert("Chef locked");
+ const v=newIngredient.value.trim();
  if(!v) return;
  state.ingredients.push(v);
- document.getElementById("newIng").value="";
+ newIngredient.value="";
  save();
 }
 
 function addPerson(){
- const v=document.getElementById("newPerson").value.trim();
- if(!v) return;
+ const name=newPerson.value.trim();
+ if(!name) return;
  const id=Date.now();
- state.people[id]={name:v,items:{},status:"Waiting",completed:false};
- document.getElementById("newPerson").value="";
+ state.people[id]={name,items:{},status:"Waiting",done:false};
+ newPerson.value="";
  save();
 }
 
-function toggleItem(pid,ing){
- state.people[pid].items[ing]=!state.people[pid].items[ing];
+function toggleItem(pid,item){
+ state.people[pid].items[item]=!state.people[pid].items[item];
  save();
 }
 
-function setStatus(pid,s){
- state.people[pid].status=s;
- if(s==="Complete") state.people[pid].completed=true;
+function setStatus(pid,status){
+ state.people[pid].status=status;
+ if(status==="Complete") state.people[pid].done=true;
  save();
 }
 
 function removePerson(pid){
- if(!confirm("Remove person?")) return;
- delete state.people[pid];
- save();
+ if(confirm("Remove this person?")){
+  delete state.people[pid];
+  save();
+ }
 }
 
 function render(){
- document.getElementById("title").innerText=state.title;
+ title.innerText=state.title;
 
- const ingDiv=document.getElementById("ingredients");
- ingDiv.innerHTML="";
+ ingredientList.innerHTML="";
  state.ingredients.forEach(i=>{
-  const d=document.createElement("div");
-  d.textContent=i;
-  ingDiv.appendChild(d);
+  ingredientList.innerHTML+=`<span>• ${i} </span>`;
  });
 
- const pDiv=document.getElementById("people");
- pDiv.innerHTML="";
+ people.innerHTML="";
+ completed.innerHTML="";
+
  Object.entries(state.people).forEach(([id,p])=>{
-  if(p.completed) return;
-  const d=document.createElement("div");
-  d.className="person";
-  d.innerHTML=`<strong>${p.name}</strong>`;
+  if(p.done){
+   completed.innerHTML+=`<div class="completed">${p.name}</div>`;
+   return;
+  }
+
+  let html=`<div class="person"><strong>${p.name}</strong>`;
   state.ingredients.forEach(i=>{
    const c=p.items[i]?"checked":"";
-   d.innerHTML+=`<div><input type="checkbox" ${c} onchange="toggleItem(${id},'${i}')"> ${i}</div>`;
+   html+=`<div><input type="checkbox" ${c} onclick="toggleItem(${id},'${i}')"> ${i}</div>`;
   });
-  d.innerHTML+=`
+  html+=`
    <div class="status">${p.status}</div>
-   <div class="controls">
    <button onclick="setStatus(${id},'Waiting')">Waiting</button>
    <button onclick="setStatus(${id},'In Progress')">In Progress</button>
    <button onclick="setStatus(${id},'Complete')">Complete</button>
-   <button onclick="removePerson(${id})">Remove</button>
-   </div>`;
-  pDiv.appendChild(d);
- });
-
- const cDiv=document.getElementById("completed");
- cDiv.innerHTML="";
- Object.values(state.people).forEach(p=>{
-  if(p.completed) cDiv.innerHTML+=`<div class="completed">${p.name} ✔</div>`;
+   <button class="danger" onclick="removePerson(${id})">Remove</button>
+  </div>`;
+  people.innerHTML+=html;
  });
 }
-
-window.toggleItem=toggleItem;
-window.setStatus=setStatus;
-window.removePerson=removePerson;
 </script>
 
 </body>
