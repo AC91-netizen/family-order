@@ -5,28 +5,63 @@
 <title>Family Order Builder</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<!-- Firebase compat (works on GitHub Pages) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <style>
-body{font-family:'Segoe UI',sans-serif;background:#f7f3ef;margin:0;padding:20px}
+body{
+  font-family:'Segoe UI',sans-serif;
+  background:#f7f3ef;
+  margin:0;
+  padding:20px
+}
 h1{text-align:center;font-size:2.3em}
-.section{background:#fff;padding:16px;margin:16px auto;max-width:1000px;border-radius:14px;box-shadow:0 4px 15px rgba(0,0,0,.08)}
+.section{
+  background:#fff;
+  padding:16px;
+  margin:16px auto;
+  max-width:1000px;
+  border-radius:14px;
+  box-shadow:0 4px 15px rgba(0,0,0,.08)
+}
 .row{display:flex;gap:8px;flex-wrap:wrap}
-input{padding:8px;border-radius:8px;border:1px solid #ccc;flex:1}
-button{padding:8px 14px;border-radius:8px;border:none;background:#ff7a18;color:#fff;cursor:pointer}
+input{
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  flex:1
+}
+button{
+  padding:8px 14px;
+  border-radius:8px;
+  border:none;
+  background:#ff7a18;
+  color:#fff;
+  cursor:pointer
+}
 button.danger{background:#c0392b}
 button.small{padding:4px 8px;font-size:.8em}
-.person{background:#fafafa;border-radius:12px;padding:12px;margin-top:12px}
-.ingredient{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
-#status{text-align:center;font-weight:bold;margin-bottom:10px}
+.person{
+  background:#fafafa;
+  border-radius:12px;
+  padding:12px;
+  margin-top:12px
+}
+.ingredient{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin:4px 0
+}
+#appStatus{text-align:center;font-weight:bold;margin-bottom:10px}
 </style>
 </head>
 
 <body>
 
-<h1 contenteditable id="title">🍔 Family Order Builder</h1>
-<div id="status">⏳ Loading…</div>
+<h1 id="title" contenteditable>🍔 Family Order Builder</h1>
+<div id="appStatus">⏳ Loading…</div>
 
 <div class="section">
 <h2>👨‍🍳 Chef Controls</h2>
@@ -56,6 +91,7 @@ button.small{padding:4px 8px;font-size:.8em}
 </div>
 
 <script>
+/* ---------- Firebase setup ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyDC8KLBdJ_eKxmGgUxvkMYL0FTK9b3V0UU",
   authDomain: "family-order-board-e0194.firebaseapp.com",
@@ -67,109 +103,125 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database().ref("step1-final");
+const db = firebase.database().ref("family-order-step1");
 
-let chefUnlocked=false;
-let state=null;
-let ready=false;
+/* ---------- DOM refs ---------- */
+const appStatus = document.getElementById("appStatus");
+const ingredientList = document.getElementById("ingredientList");
+const peopleList = document.getElementById("peopleList");
+const titleEl = document.getElementById("title");
+const chefPin = document.getElementById("chefPin");
+const chefStatus = document.getElementById("chefStatus");
+const newIngredient = document.getElementById("newIngredient");
+const newPerson = document.getElementById("newPerson");
 
-db.on("value",snap=>{
-  if(!snap.exists()){
-    const initial={
-      title:"🍔 Family Order Builder",
-      ingredients:{},
-      people:{}
-    };
-    db.set(initial);
+/* ---------- App state ---------- */
+let chefUnlocked = false;
+let state = null;
+let ready = false;
+
+/* ---------- Firebase listener ---------- */
+db.on("value", snap => {
+  if (!snap.exists()) {
+    db.set({
+      title: "🍔 Family Order Builder",
+      ingredients: {},
+      people: {}
+    });
     return;
   }
-  state=snap.val();
-  ready=true;
-  status.innerText="✅ Ready";
+  state = snap.val();
+  ready = true;
+  appStatus.innerText = "✅ Ready";
   render();
 });
 
+/* ---------- Helpers ---------- */
 function ensureReady(){
   if(!ready){
-    alert("Please wait for page to finish loading");
+    alert("Please wait for loading to finish");
     return false;
   }
   return true;
 }
-
 function save(){ db.set(state); }
 
+/* ---------- Chef ---------- */
 function unlockChef(){
-  if(chefPin.value==="1234"){
-    chefUnlocked=true;
-    chefStatus.innerText="🔓 Chef unlocked";
+  if(chefPin.value === "1234"){
+    chefUnlocked = true;
+    chefStatus.innerText = "🔓 Chef unlocked";
     render();
   }
 }
 
+/* ---------- Ingredients ---------- */
 function addIngredient(){
   if(!ensureReady()) return;
   if(!chefUnlocked) return alert("Chef locked");
-  const name=newIngredient.value.trim();
+  const name = newIngredient.value.trim();
   if(!name) return;
-  state.ingredients[Date.now()]={name};
-  newIngredient.value="";
+  state.ingredients[Date.now()] = { name };
+  newIngredient.value = "";
   save();
 }
-
 function removeIngredient(id){
   if(!chefUnlocked) return;
   delete state.ingredients[id];
-  Object.values(state.people).forEach(p=>delete p.items?.[id]);
+  Object.values(state.people).forEach(p=>{
+    if(p.items) delete p.items[id];
+  });
   save();
 }
 
+/* ---------- People ---------- */
 function addPerson(){
   if(!ensureReady()) return;
-  const name=newPerson.value.trim();
+  const name = newPerson.value.trim();
   if(!name) return;
-  state.people[Date.now()]={name,items:{}};
-  newPerson.value="";
+  state.people[Date.now()] = { name, items:{} };
+  newPerson.value = "";
   save();
 }
-
 function removePerson(id){
   delete state.people[id];
   save();
 }
 
+/* ---------- Selections ---------- */
 function toggleItem(pid,iid){
-  state.people[pid].items[iid]=!state.people[pid].items[iid];
+  state.people[pid].items[iid] = !state.people[pid].items[iid];
   save();
 }
 
+/* ---------- Render ---------- */
 function render(){
-  title.innerText=state.title;
+  titleEl.innerText = state.title;
 
-  ingredientList.innerHTML="";
+  ingredientList.innerHTML = "";
   Object.entries(state.ingredients).forEach(([id,ing])=>{
-    ingredientList.innerHTML+=`
+    ingredientList.innerHTML += `
       <div class="ingredient">
         <span>${ing.name}</span>
-        ${chefUnlocked?`<button class="small danger" onclick="removeIngredient(${id})">✖</button>`:""}
+        ${chefUnlocked ? `<button class="small danger" onclick="removeIngredient(${id})">✖</button>` : ""}
       </div>`;
   });
 
-  peopleList.innerHTML="";
+  peopleList.innerHTML = "";
   Object.entries(state.people).forEach(([pid,p])=>{
-    let html=`<div class="person"><strong>${p.name}</strong>`;
+    let html = `<div class="person"><strong>${p.name}</strong>`;
     Object.entries(state.ingredients).forEach(([iid,ing])=>{
-      const c=p.items[iid]?"checked":"";
-      html+=`
+      const checked = p.items[iid] ? "checked" : "";
+      html += `
         <div>
-          <input type="checkbox" ${c}
+          <input type="checkbox" ${checked}
             onclick="toggleItem(${pid},${iid})"> ${ing.name}
         </div>`;
     });
-    html+=`
+    html += `
       <button class="danger small" onclick="removePerson(${pid})">Remove</button>
     </div>`;
-    peopleList.innerHTML+=html;
+    peopleList.innerHTML += html;
   });
 }
 </script>
