@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kitchen Order Board</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+body{
+  font-family:'Segoe UI',sans-serif;
+  background:#1e1e1e;
+  color:#fff;
+  margin:0;
+  padding:20px
+}
+h1{text-align:center;font-size:2.2em;margin-bottom:10px}
+.section{
+  background:#2a2a2a;
+  padding:16px;
+  margin:16px auto;
+  max-width:1100px;
+  border-radius:14px
+}
+.order{
+  background:#333;
+  border-radius:12px;
+  padding:14px;
+  margin-bottom:12px
+}
+.order h3{margin:0 0 6px 0}
+.tag{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:20px;
+  font-size:.85em;
+  margin-right:6px
+}
+.waiting{background:#7f8c8d}
+.progress{background:#e67e22}
+.complete{background:#27ae60}
+button{
+  padding:6px 10px;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  margin-right:6px
+}
+.waitBtn{background:#7f8c8d;color:#fff}
+.progBtn{background:#e67e22;color:#fff}
+.doneBtn{background:#27ae60;color:#fff}
+</style>
+</head>
+
+<body>
+
+<h1>🍳 Kitchen Order Board</h1>
+
+<div class="section">
+<h2>🧾 Active Orders</h2>
+<div id="activeOrders"></div>
+</div>
+
+<div class="section">
+<h2>✅ Completed Orders</h2>
+<div id="completedOrders"></div>
+</div>
+
+<script>
+/* ---------- Firebase ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyDC8KLBdJ_eKxmGgUxvkMYL0FTK9b3V0UU",
+  authDomain: "family-order-board-e0194.firebaseapp.com",
+  databaseURL: "https://family-order-board-e0194-default-rtdb.firebaseio.com",
+  projectId: "family-order-board-e0194",
+  storageBucket: "family-order-board-e0194.firebasestorage.app",
+  messagingSenderId: "171957463704",
+  appId: "1:171957463704:web:1ea720f263998104107eed"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database().ref("family-order");
+
+/* ---------- DOM ---------- */
+const activeOrders = document.getElementById("activeOrders");
+const completedOrders = document.getElementById("completedOrders");
+
+/* ---------- Data ---------- */
+db.on("value", snap => {
+  const data = snap.val();
+  if(!data || !data.people || !data.ingredients) return;
+
+  activeOrders.innerHTML = "";
+  completedOrders.innerHTML = "";
+
+  Object.entries(data.people).forEach(([pid,p])=>{
+    const items = Object.entries(p.items || {})
+      .filter(([,v])=>v)
+      .map(([iid])=>data.ingredients[iid]?.name)
+      .filter(Boolean);
+
+    const status = p.status || "waiting";
+    const card = document.createElement("div");
+    card.className = "order";
+
+    card.innerHTML = `
+      <h3>${p.name}</h3>
+      <div>${items.join(", ") || "No ingredients selected"}</div>
+      <div style="margin:8px 0">
+        <span class="tag ${status}">
+          ${status === "waiting" ? "🕒 Waiting" :
+            status === "progress" ? "🔥 In Progress" :
+            "✅ Complete"}
+        </span>
+      </div>
+      <div>
+        <button class="waitBtn" onclick="setStatus('${pid}','waiting')">Waiting</button>
+        <button class="progBtn" onclick="setStatus('${pid}','progress')">In Progress</button>
+        <button class="doneBtn" onclick="setStatus('${pid}','complete')">Complete</button>
+      </div>
+    `;
+
+    if(status === "complete"){
+      completedOrders.appendChild(card);
+    } else {
+      activeOrders.appendChild(card);
+    }
+  });
+});
+
+/* ---------- Status ---------- */
+function setStatus(pid,status){
+  db.child("people").child(pid).child("status").set(status);
+}
+</script>
+
+</body>
+</html>
