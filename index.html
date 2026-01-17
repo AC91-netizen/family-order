@@ -5,12 +5,6 @@
 <title>Family Order Builder</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<div class="section" style="text-align:center">
-  <a href="kitchen.html">
-    <button>🍳 Go to Kitchen / Chef View</button>
-  </a>
-</div>
-  
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -25,7 +19,6 @@ button.danger{background:#c0392b}
 button.small{padding:4px 8px;font-size:.8em}
 .person{background:#fafafa;border-radius:12px;padding:12px;margin-top:12px}
 .ingredient{display:flex;align-items:center;justify-content:space-between;margin:6px 0}
-.ingredient label{flex:1}
 #status{text-align:center;font-weight:bold;margin-bottom:10px}
 </style>
 </head>
@@ -33,6 +26,13 @@ button.small{padding:4px 8px;font-size:.8em}
 <body>
 
 <h1>🍔 Family Order Builder</h1>
+
+<div class="section" style="text-align:center">
+  <a href="kitchen.html">
+    <button>🍳 Go to Kitchen / Chef View</button>
+  </a>
+</div>
+
 <div id="status">⏳ Loading…</div>
 
 <div class="section">
@@ -63,6 +63,7 @@ button.small{padding:4px 8px;font-size:.8em}
 </div>
 
 <script>
+/* ---------- FIREBASE ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyDC8KLBdJ_eKxmGgUxvkMYL0FTK9b3V0UU",
   authDomain: "family-order-board-e0194.firebaseapp.com",
@@ -76,55 +77,71 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database().ref("family-order");
 
-let state=null;
-let chefUnlocked=false;
+/* ---------- STATE ---------- */
+let state = { ingredients:{}, people:{} };
+let chefUnlocked = false;
 
-db.on("value",snap=>{
-  if(!snap.exists()){
-    db.set({ingredients:{},people:{}});
+/* ---------- LOAD ---------- */
+db.on("value", snap => {
+  if (!snap.exists()) {
+    db.set({ ingredients:{}, people:{} });
     return;
   }
-  state=snap.val();
-  status.innerText="✅ Ready";
+
+  state = snap.val();
+  if (!state.ingredients) state.ingredients = {};
+  if (!state.people) state.people = {};
+
+  status.innerText = "✅ Ready";
   render();
 });
 
-function save(){ db.set(state); }
+/* ---------- SAVE ---------- */
+function save(){
+  db.set(state);
+}
 
+/* ---------- CHEF ---------- */
 function unlockChef(){
-  if(chefPin.value==="1234"){
-    chefUnlocked=true;
-    chefStatus.innerText="🔓 Chef unlocked";
+  if (chefPin.value === "1234") {
+    chefUnlocked = true;
+    chefStatus.innerText = "🔓 Chef unlocked";
     render();
+  } else {
+    alert("Wrong PIN");
   }
 }
 
 function addIngredient(){
-  if(!chefUnlocked) return alert("Chef locked");
-  const name=newIngredient.value.trim();
-  if(!name) return;
-  state.ingredients[Date.now()]={name,available:true};
-  newIngredient.value="";
+  if (!chefUnlocked) return alert("Chef locked");
+  const name = newIngredient.value.trim();
+  if (!name) return;
+  state.ingredients[Date.now()] = { name, available:true };
+  newIngredient.value = "";
   save();
 }
 
 function toggleAvailable(id){
-  state.ingredients[id].available=!state.ingredients[id].available;
+  state.ingredients[id].available = !state.ingredients[id].available;
   save();
 }
 
 function removeIngredient(id){
-  if(!chefUnlocked) return;
+  if (!chefUnlocked) return;
   delete state.ingredients[id];
-  Object.values(state.people).forEach(p=>delete p.items?.[id]);
+  Object.values(state.people).forEach(p => {
+    if (p.items) delete p.items[id];
+  });
   save();
 }
 
+/* ---------- PEOPLE ---------- */
 function addPerson(){
-  const name=newPerson.value.trim();
-  if(!name) return;
-  state.people[Date.now()]={name,items:{}};
-  newPerson.value="";
+  if (!state.people) state.people = {};
+  const name = newPerson.value.trim();
+  if (!name) return;
+  state.people[Date.now()] = { name, items:{} };
+  newPerson.value = "";
   save();
 }
 
@@ -133,43 +150,50 @@ function removePerson(id){
   save();
 }
 
-function toggleItem(pid,iid){
-  state.people[pid].items[iid]=!state.people[pid].items[iid];
+function toggleItem(pid, iid){
+  if (!state.people[pid].items) state.people[pid].items = {};
+  state.people[pid].items[iid] = !state.people[pid].items[iid];
   save();
 }
 
+/* ---------- RENDER ---------- */
 function render(){
-  ingredientList.innerHTML="";
-  Object.entries(state.ingredients||{}).forEach(([id,ing])=>{
-    ingredientList.innerHTML+=`
+  ingredientList.innerHTML = "";
+  Object.entries(state.ingredients).forEach(([id, ing]) => {
+    ingredientList.innerHTML += `
       <div class="ingredient">
         <label>
-          <input type="checkbox" ${ing.available?"checked":""}
-            ${chefUnlocked?"":"disabled"}
+          <input type="checkbox"
+            ${ing.available ? "checked" : ""}
+            ${chefUnlocked ? "" : "disabled"}
             onchange="toggleAvailable(${id})">
           ${ing.name}
         </label>
-        ${chefUnlocked?`<button class="small danger" onclick="removeIngredient(${id})">✖</button>`:""}
-      </div>`;
+        ${chefUnlocked
+          ? `<button class="small danger" onclick="removeIngredient(${id})">✖</button>`
+          : ""}
+      </div>
+    `;
   });
 
-  peopleList.innerHTML="";
-  Object.entries(state.people||{}).forEach(([pid,p])=>{
-    let html=`<div class="person"><strong>${p.name}</strong>`;
-    Object.entries(state.ingredients||{}).forEach(([iid,ing])=>{
-      if(!ing.available) return;
-      const c=p.items?.[iid]?"checked":"";
-      html+=`
+  peopleList.innerHTML = "";
+  Object.entries(state.people).forEach(([pid, p]) => {
+    let html = `<div class="person"><strong>${p.name}</strong>`;
+    Object.entries(state.ingredients).forEach(([iid, ing]) => {
+      if (!ing.available) return;
+      const checked = p.items && p.items[iid] ? "checked" : "";
+      html += `
         <div>
-          <input type="checkbox" ${c}
+          <input type="checkbox" ${checked}
             onclick="toggleItem(${pid},${iid})">
           ${ing.name}
-        </div>`;
+        </div>
+      `;
     });
-    html+=`
+    html += `
       <button class="danger small" onclick="removePerson(${pid})">Remove</button>
     </div>`;
-    peopleList.innerHTML+=html;
+    peopleList.innerHTML += html;
   });
 }
 </script>
