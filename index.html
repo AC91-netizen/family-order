@@ -5,12 +5,6 @@
 <title>Family Order Builder</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<div style="text-align:center; margin: 16px 0;">
-  <a href="kitchen.html">
-    <button>🍳 Open Kitchen Order Board</button>
-  </a>
-</div>
-  
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -24,15 +18,16 @@ button{padding:8px 14px;border-radius:8px;border:none;background:#ff7a18;color:#
 button.danger{background:#c0392b}
 button.small{padding:4px 8px;font-size:.8em}
 .person{background:#fafafa;border-radius:12px;padding:12px;margin-top:12px}
-.ingredient{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
-#appStatus{text-align:center;font-weight:bold;margin-bottom:10px}
+.ingredient{display:flex;align-items:center;justify-content:space-between;margin:6px 0}
+.ingredient label{flex:1}
+#status{text-align:center;font-weight:bold;margin-bottom:10px}
 </style>
 </head>
 
 <body>
 
-<h1 id="title" contenteditable>🍔 Family Order Builder</h1>
-<div id="appStatus">⏳ Loading…</div>
+<h1>🍔 Family Order Builder</h1>
+<div id="status">⏳ Loading…</div>
 
 <div class="section">
 <h2>👨‍🍳 Chef Controls</h2>
@@ -44,7 +39,7 @@ button.small{padding:4px 8px;font-size:.8em}
 </div>
 
 <div class="section">
-<h2>🥗 Ingredients</h2>
+<h2>🥗 Ingredients (Chef)</h2>
 <div class="row">
   <input id="newIngredient" placeholder="Add ingredient">
   <button onclick="addIngredient()">Add</button>
@@ -75,61 +70,55 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database().ref("family-order");
 
-const appStatus = document.getElementById("appStatus");
-const ingredientList = document.getElementById("ingredientList");
-const peopleList = document.getElementById("peopleList");
-const chefPin = document.getElementById("chefPin");
-const chefStatus = document.getElementById("chefStatus");
-const newIngredient = document.getElementById("newIngredient");
-const newPerson = document.getElementById("newPerson");
-const titleEl = document.getElementById("title");
+let state=null;
+let chefUnlocked=false;
 
-let chefUnlocked = false;
-let state = {};
-let ready = false;
-
-db.on("value", snap => {
-  state = snap.val() || {};
-  state.ingredients ||= {};
-  state.people ||= {};
-  state.title ||= "🍔 Family Order Builder";
-  ready = true;
-  appStatus.innerText = "✅ Ready";
+db.on("value",snap=>{
+  if(!snap.exists()){
+    db.set({ingredients:{},people:{}});
+    return;
+  }
+  state=snap.val();
+  status.innerText="✅ Ready";
   render();
 });
 
 function save(){ db.set(state); }
 
 function unlockChef(){
-  if(chefPin.value === "1234"){
-    chefUnlocked = true;
-    chefStatus.innerText = "🔓 Chef unlocked";
+  if(chefPin.value==="1234"){
+    chefUnlocked=true;
+    chefStatus.innerText="🔓 Chef unlocked";
     render();
   }
 }
 
 function addIngredient(){
   if(!chefUnlocked) return alert("Chef locked");
-  const name = newIngredient.value.trim();
+  const name=newIngredient.value.trim();
   if(!name) return;
-  state.ingredients ||= {};
-  state.ingredients[Date.now()] = { name };
-  newIngredient.value = "";
+  state.ingredients[Date.now()]={name,available:true};
+  newIngredient.value="";
+  save();
+}
+
+function toggleAvailable(id){
+  state.ingredients[id].available=!state.ingredients[id].available;
   save();
 }
 
 function removeIngredient(id){
+  if(!chefUnlocked) return;
   delete state.ingredients[id];
-  Object.values(state.people).forEach(p => p.items && delete p.items[id]);
+  Object.values(state.people).forEach(p=>delete p.items?.[id]);
   save();
 }
 
 function addPerson(){
-  const name = newPerson.value.trim();
+  const name=newPerson.value.trim();
   if(!name) return;
-  state.people ||= {};
-  state.people[Date.now()] = { name, items:{} };
-  newPerson.value = "";
+  state.people[Date.now()]={name,items:{}};
+  newPerson.value="";
   save();
 }
 
@@ -139,36 +128,42 @@ function removePerson(id){
 }
 
 function toggleItem(pid,iid){
-  state.people[pid].items ||= {};
-  state.people[pid].items[iid] = !state.people[pid].items[iid];
+  state.people[pid].items[iid]=!state.people[pid].items[iid];
   save();
 }
 
 function render(){
-  titleEl.innerText = state.title;
-
-  ingredientList.innerHTML = "";
-  Object.entries(state.ingredients).forEach(([id,ing])=>{
-    ingredientList.innerHTML += `
+  ingredientList.innerHTML="";
+  Object.entries(state.ingredients||{}).forEach(([id,ing])=>{
+    ingredientList.innerHTML+=`
       <div class="ingredient">
-        <span>${ing.name}</span>
-        ${chefUnlocked ? `<button class="small danger" onclick="removeIngredient('${id}')">✖</button>` : ""}
+        <label>
+          <input type="checkbox" ${ing.available?"checked":""}
+            ${chefUnlocked?"":"disabled"}
+            onchange="toggleAvailable(${id})">
+          ${ing.name}
+        </label>
+        ${chefUnlocked?`<button class="small danger" onclick="removeIngredient(${id})">✖</button>`:""}
       </div>`;
   });
 
-  peopleList.innerHTML = "";
-  Object.entries(state.people).forEach(([pid,p])=>{
-    let html = `<div class="person"><strong>${p.name}</strong>`;
-    Object.entries(state.ingredients).forEach(([iid,ing])=>{
-      const checked = p.items?.[iid] ? "checked" : "";
-      html += `
+  peopleList.innerHTML="";
+  Object.entries(state.people||{}).forEach(([pid,p])=>{
+    let html=`<div class="person"><strong>${p.name}</strong>`;
+    Object.entries(state.ingredients||{}).forEach(([iid,ing])=>{
+      if(!ing.available) return;
+      const c=p.items?.[iid]?"checked":"";
+      html+=`
         <div>
-          <input type="checkbox" ${checked}
-            onclick="toggleItem('${pid}','${iid}')"> ${ing.name}
+          <input type="checkbox" ${c}
+            onclick="toggleItem(${pid},${iid})">
+          ${ing.name}
         </div>`;
     });
-    html += `<button class="danger small" onclick="removePerson('${pid}')">Remove</button></div>`;
-    peopleList.innerHTML += html;
+    html+=`
+      <button class="danger small" onclick="removePerson(${pid})">Remove</button>
+    </div>`;
+    peopleList.innerHTML+=html;
   });
 }
 </script>
