@@ -83,22 +83,22 @@ let chefUnlocked = false;
 
 /* ---------- LOAD ---------- */
 db.on("value", snap => {
-  if (!snap.exists()) {
-    db.set({ ingredients:{}, people:{} });
-    return;
-  }
+  if (!snap.exists()) return;
 
-  state = snap.val();
-  if (!state.ingredients) state.ingredients = {};
-  if (!state.people) state.people = {};
+  const data = snap.val();
+  state.ingredients = data.ingredients || {};
+  state.people = data.people || {};
 
   status.innerText = "✅ Ready";
   render();
 });
 
-/* ---------- SAVE ---------- */
+/* ---------- SAFE SAVE (NO OVERWRITE) ---------- */
 function save(){
-  db.set(state);
+  db.update({
+    ingredients: state.ingredients,
+    people: state.people
+  });
 }
 
 /* ---------- CHEF ---------- */
@@ -116,6 +116,7 @@ function addIngredient(){
   if (!chefUnlocked) return alert("Chef locked");
   const name = newIngredient.value.trim();
   if (!name) return;
+
   state.ingredients[Date.now()] = { name, available:true };
   newIngredient.value = "";
   save();
@@ -128,6 +129,7 @@ function toggleAvailable(id){
 
 function removeIngredient(id){
   if (!chefUnlocked) return;
+
   delete state.ingredients[id];
   Object.values(state.people).forEach(p => {
     if (p.items) delete p.items[id];
@@ -137,9 +139,9 @@ function removeIngredient(id){
 
 /* ---------- PEOPLE ---------- */
 function addPerson(){
-  if (!state.people) state.people = {};
   const name = newPerson.value.trim();
   if (!name) return;
+
   state.people[Date.now()] = { name, items:{} };
   newPerson.value = "";
   save();
