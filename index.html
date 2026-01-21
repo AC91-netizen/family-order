@@ -39,7 +39,7 @@ button.small{padding:4px 8px;font-size:.8em}
 <h2>👨‍🍳 Chef Controls</h2>
 <div class="row">
   <input type="password" id="chefPin" placeholder="Chef PIN">
-  <button onclick="unlockChef()">Unlock</button>
+  <button id="unlockBtn">Unlock</button>
 </div>
 <div id="chefStatus"></div>
 </div>
@@ -48,7 +48,7 @@ button.small{padding:4px 8px;font-size:.8em}
 <h2>🥗 Ingredients (Chef)</h2>
 <div class="row">
   <input id="newIngredient" placeholder="Add ingredient">
-  <button onclick="addIngredient()">Add</button>
+  <button id="addIngredientBtn">Add</button>
 </div>
 <div id="ingredientList"></div>
 </div>
@@ -57,14 +57,14 @@ button.small{padding:4px 8px;font-size:.8em}
 <h2>👨‍👩‍👧‍👦 People</h2>
 <div class="row">
   <input id="newPerson" placeholder="Add person">
-  <button onclick="addPerson()">Add Person</button>
+  <button id="addPersonBtn">Add Person</button>
 </div>
 <div id="peopleList"></div>
 </div>
 
 <script>
 /* ---------- DOM ---------- */
-const status = document.getElementById("status");
+const statusEl = document.getElementById("status");
 const ingredientList = document.getElementById("ingredientList");
 const peopleList = document.getElementById("peopleList");
 const chefPin = document.getElementById("chefPin");
@@ -72,8 +72,12 @@ const chefStatus = document.getElementById("chefStatus");
 const newIngredient = document.getElementById("newIngredient");
 const newPerson = document.getElementById("newPerson");
 
+document.getElementById("unlockBtn").onclick = unlockChef;
+document.getElementById("addIngredientBtn").onclick = addIngredient;
+document.getElementById("addPersonBtn").onclick = addPerson;
+
 /* ---------- FIREBASE ---------- */
-const firebaseConfig = {
+firebase.initializeApp({
   apiKey: "AIzaSyDC8KLBdJ_eKxmGgUxvkMYL0FTK9b3V0UU",
   authDomain: "family-order-board-e0194.firebaseapp.com",
   databaseURL: "https://family-order-board-e0194-default-rtdb.firebaseio.com",
@@ -81,9 +85,8 @@ const firebaseConfig = {
   storageBucket: "family-order-board-e0194.firebasestorage.app",
   messagingSenderId: "171957463704",
   appId: "1:171957463704:web:1ea720f263998104107eed"
-};
+});
 
-firebase.initializeApp(firebaseConfig);
 const db = firebase.database().ref("family-order");
 
 /* ---------- STATE ---------- */
@@ -92,16 +95,10 @@ let chefUnlocked = false;
 
 /* ---------- LOAD ---------- */
 db.on("value", snap => {
-  if (!snap.exists()) {
-    db.set({ ingredients:{}, people:{} });
-    return;
-  }
-
-  const data = snap.val();
+  const data = snap.val() || {};
   state.ingredients = data.ingredients || {};
   state.people = data.people || {};
-
-  status.innerText = "✅ Ready";
+  statusEl.innerText = "✅ Ready";
   render();
 });
 
@@ -119,16 +116,13 @@ function unlockChef(){
     chefUnlocked = true;
     chefStatus.innerText = "🔓 Chef unlocked";
     render();
-  } else {
-    alert("Wrong PIN");
-  }
+  } else alert("Wrong PIN");
 }
 
 function addIngredient(){
   if (!chefUnlocked) return alert("Chef locked");
   const name = newIngredient.value.trim();
   if (!name) return;
-
   state.ingredients[Date.now()] = { name, available:true };
   newIngredient.value = "";
   save();
@@ -140,12 +134,8 @@ function toggleAvailable(id){
 }
 
 function removeIngredient(id){
-  if (!chefUnlocked) return;
   delete state.ingredients[id];
-
-  Object.values(state.people).forEach(p => {
-    if (p.items) delete p.items[id];
-  });
+  Object.values(state.people).forEach(p => p.items && delete p.items[id]);
   save();
 }
 
@@ -153,7 +143,6 @@ function removeIngredient(id){
 function addPerson(){
   const name = newPerson.value.trim();
   if (!name) return;
-
   state.people[Date.now()] = { name, items:{} };
   newPerson.value = "";
   save();
@@ -164,8 +153,7 @@ function removePerson(id){
   save();
 }
 
-function toggleItem(pid, iid){
-  if (!state.people[pid].items) state.people[pid].items = {};
+function toggleItem(pid,iid){
   state.people[pid].items[iid] = !state.people[pid].items[iid];
   save();
 }
@@ -173,40 +161,34 @@ function toggleItem(pid, iid){
 /* ---------- RENDER ---------- */
 function render(){
   ingredientList.innerHTML = "";
-  Object.entries(state.ingredients).forEach(([id, ing]) => {
+  Object.entries(state.ingredients).forEach(([id,ing])=>{
     ingredientList.innerHTML += `
       <div class="ingredient">
         <label>
           <input type="checkbox"
-            ${ing.available ? "checked" : ""}
-            ${chefUnlocked ? "" : "disabled"}
+            ${ing.available?"checked":""}
+            ${chefUnlocked?"":"disabled"}
             onchange="toggleAvailable(${id})">
           ${ing.name}
         </label>
-        ${chefUnlocked
-          ? `<button class="small danger" onclick="removeIngredient(${id})">✖</button>`
-          : ""}
-      </div>
-    `;
+        ${chefUnlocked?`<button class="small danger" onclick="removeIngredient(${id})">✖</button>`:""}
+      </div>`;
   });
 
   peopleList.innerHTML = "";
-  Object.entries(state.people).forEach(([pid, p]) => {
+  Object.entries(state.people).forEach(([pid,p])=>{
     let html = `<div class="person"><strong>${p.name}</strong>`;
-    Object.entries(state.ingredients).forEach(([iid, ing]) => {
-      if (!ing.available) return;
-      const checked = p.items && p.items[iid] ? "checked" : "";
+    Object.entries(state.ingredients).forEach(([iid,ing])=>{
+      if(!ing.available) return;
       html += `
         <div>
-          <input type="checkbox" ${checked}
+          <input type="checkbox"
+            ${p.items[iid]?"checked":""}
             onclick="toggleItem(${pid},${iid})">
           ${ing.name}
-        </div>
-      `;
+        </div>`;
     });
-    html += `
-      <button class="danger small" onclick="removePerson(${pid})">Remove</button>
-    </div>`;
+    html += `<button class="danger small" onclick="removePerson(${pid})">Remove</button></div>`;
     peopleList.innerHTML += html;
   });
 }
