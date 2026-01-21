@@ -63,6 +63,15 @@ button.small{padding:4px 8px;font-size:.8em}
 </div>
 
 <script>
+/* ---------- DOM ---------- */
+const status = document.getElementById("status");
+const ingredientList = document.getElementById("ingredientList");
+const peopleList = document.getElementById("peopleList");
+const chefPin = document.getElementById("chefPin");
+const chefStatus = document.getElementById("chefStatus");
+const newIngredient = document.getElementById("newIngredient");
+const newPerson = document.getElementById("newPerson");
+
 /* ---------- FIREBASE ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyDC8KLBdJ_eKxmGgUxvkMYL0FTK9b3V0UU",
@@ -83,7 +92,10 @@ let chefUnlocked = false;
 
 /* ---------- LOAD ---------- */
 db.on("value", snap => {
-  if (!snap.exists()) return;
+  if (!snap.exists()) {
+    db.set({ ingredients:{}, people:{} });
+    return;
+  }
 
   const data = snap.val();
   state.ingredients = data.ingredients || {};
@@ -93,7 +105,7 @@ db.on("value", snap => {
   render();
 });
 
-/* ---------- SAFE SAVE (NO OVERWRITE) ---------- */
+/* ---------- SAVE (SAFE) ---------- */
 function save(){
   db.update({
     ingredients: state.ingredients,
@@ -129,8 +141,8 @@ function toggleAvailable(id){
 
 function removeIngredient(id){
   if (!chefUnlocked) return;
-
   delete state.ingredients[id];
+
   Object.values(state.people).forEach(p => {
     if (p.items) delete p.items[id];
   });
